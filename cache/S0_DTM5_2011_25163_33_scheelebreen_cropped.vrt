@@ -1,0 +1,16 @@
+<VRTDataset rasterXSize="2498" rasterYSize="3865">
+  <SRS dataAxisToSRSAxisMapping="1,2">PROJCS["WGS 84 / UTM zone 33N",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Transverse_Mercator"],PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",15],PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],PARAMETER["false_northing",0],UNIT["metre",1],AXIS["Easting",EAST],AXIS["Northing",NORTH],AUTHORITY["EPSG","32633"]]</SRS>
+  <GeoTransform>  5.4015400000000000e+05,  4.9999999999261018e+00,  0.0000000000000000e+00,  8.6371860000000000e+06,  0.0000000000000000e+00, -4.9999999999261018e+00</GeoTransform>
+  <VRTRasterBand dataType="Float32" band="1">
+    <NoDataValue>3.39999995214436425e+38</NoDataValue>
+    <ColorInterp>Gray</ColorInterp>
+    <ComplexSource resampling="bilinear">
+      <SourceFilename relativeToVRT="1">S0_DTM5_2011_25163_33_scheelebreen_warped.vrt</SourceFilename>
+      <SourceBand>1</SourceBand>
+      <SourceProperties RasterXSize="21773" RasterYSize="25947" DataType="Float32" BlockXSize="512" BlockYSize="128" />
+      <SrcRect xOff="14789.3000001129" yOff="6735.30002073356" xSize="2498" ySize="3865" />
+      <DstRect xOff="0" yOff="0" xSize="2498" ySize="3865" />
+      <NODATA>3.39999995214436425e+38</NODATA>
+    </ComplexSource>
+  </VRTRasterBand>
+</VRTDataset>
