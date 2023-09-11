@@ -50,20 +50,40 @@ def main():
     scheelebreen_shp = load_shp("Scheelebreen")
 
     # clip DEM to glacier area outlines
-    cropped_dem = mask_dem(dem_subset, scheelebreen_shp)
+    masked_dem = mask_dem(dem_subset, scheelebreen_shp)
 
     # get elevation difference between IS2 and reference DEM
-    is2_dh = IS2_DEM_difference(cropped_dem, is2_subset, "scheelebreen")
+    is2_dh = IS2_DEM_difference(masked_dem, is2_subset, "scheelebreen")
+    print(is2_dh)
 
     # plot elevation differences !!! functions need improvement (choose which variable to plot)
     #is2_dh = xr.open_dataset("cache/scheelebreen-is2-dh.nc")
     #plot_pts(is2_dh, "dh")
 
-    hypsometric_binning("cache/scheelebreen-is2-dh.nc", "cache/S0_DTM5_2011_25163_33_scheelebreen_cropped.vrt")
+    hypsometric_binning("cache/scheelebreen-is2-dh.nc")
 
-def subset_is2(data, bounds, label):
-    # subset IS2 data by bounds, create label for them
+def subset_is2(is2_data, bounds, label):
+    """
+    Subset IS2 data using specified bounds.
 
+    The easting and northing variables need to be loaded in memory, so this is a computationally expensive task.
+    The function is cached using the label argument to speed up later calls.
+
+    Parameters
+    ----------
+    - is2_data
+        the ICESat-2 data to subset
+    - bounds
+        bounding box to use (requires the keys: "left", "right", "bottom", "top")
+    - label
+        a label to assign when caching the subset result
+
+    Returns
+    -------
+    A subset IS2 dataset within the given bounds.
+    """
+
+    # path to cached file
     cache_path = Path(f"cache/{label}-is2.nc")
 
     # if subset already exists open dataset
@@ -71,9 +91,9 @@ def subset_is2(data, bounds, label):
         return xr.open_dataset(cache_path)
 
     # subset data based on bounds
-    subset = data.where(
-        (data.easting > bounds["left"]) & (data.easting < bounds["right"]) & (data.northing > bounds["bottom"]) & (
-                    data.northing < bounds["top"]), drop=True)
+    subset = is2_data.where(
+        (is2_data.easting > bounds["left"]) & (is2_data.easting < bounds["right"]) & (is2_data.northing > bounds["bottom"]) & (
+                    is2_data.northing < bounds["top"]), drop=True)
 
     #
     cache_path.parent.mkdir(exist_ok = True)
@@ -82,14 +102,37 @@ def subset_is2(data, bounds, label):
     return subset
 
 def plot_pts(data, var):
-    # creates scatter plot of data
+    """
+    Creates a scatter plot of input data.
+
+    Works only for IS2 data as the input into the scatter plot are according to IS2 structure
+    (x=data.easting, y=data.northing.
+
+    Parameters
+    ----------
+    - data
+        data to plot (IS2 data)
+    - var
+        which variable to plot (name of variable as string)
+    """
 
     plt.scatter(data.easting, data.northing, c=data[var])
     plt.gca().set_aspect('equal')
     plt.show()
 
 def load_shp(glacier_name):
-    # loads shp based on glacier name
+    """
+    Loads a single glacier as shapefile from the GAO dataset.
+
+    Parameters
+    ----------
+    - glacier name
+        name of glacier we want to load as string
+
+    Returns
+    -------
+    Returns .shp of the outline of selected glacier.
+    """
 
     # paths
     file_name = Path("GAO_SfM_1936_1938_v3.shp")
@@ -107,6 +150,22 @@ def load_shp(glacier_name):
     return gao_glacier
 
 def load_dem(bounds, label):
+    """
+    Loads subset of DEM using the specified bounds.
+
+    Working with the DEM as a vrt.
+
+    Parameters
+    ----------
+    - bounds
+        the bounding box to use (requires the keys "left", "right", "bottom", "top")
+    - label
+        a label to assign when caching the result
+
+    Returns
+    -------
+    A subset of the DEM within the given bounds.
+    """
     # loads DEM
 
     # paths
@@ -125,7 +184,7 @@ def load_dem(bounds, label):
     # crop warped vrt to bbox
     variete.vrt.vrt.build_vrt(vrt_cropped_filepath, vrt_warped_filepath, output_bounds=bbox)
 
-    # create DEM object (??)
+    # create DEM object
     dem = xdem.DEM(vrt_cropped_filepath, load_data=False)
 
     # plot DEM
@@ -134,96 +193,88 @@ def load_dem(bounds, label):
 
     return dem
 
-def mask_dem(dem, shp):
-    # masks DEM data by the glacier area outlines (.shp)
+def mask_dem(dem, gao):
+    """
+    Masks DEM data by the glacier area outlines.
+
+    Parameters
+    ----------
+    -dem
+        DEM we want to mask
+    - gao
+        glacier area outline as input for masking the DEM (as .shp)
+
+    Returns
+    -------
+    Masked DEM containing values only within the glacier area outlines.
+    """
     # run before sampling raster
 
     # rasterize the shapefile to fit the DEM
-    shp_rasterized = gu.Vector(shp).create_mask(dem)
-    shp_rasterized.show(cmap="Purples")
+    gao_rasterized = gu.Vector(gao).create_mask(dem)
+    gao_rasterized.show(cmap="Purples")
     #plt.show()
 
     # extract values inside the glacier area outlines
     dem.load()
-    dem.set_mask(~shp_rasterized)
+    dem.set_mask(~gao_rasterized)
 
-
+    # visualization
     #dem.show(cmap="Purples")
     #plt.show()
 
     return dem
 
 def IS2_DEM_difference(dem, is2, label):
-    # get elevation difference between IS2 data and a reference DEM
+    """
+    Get elevation difference between ICESat-2 data and reference DEM.
 
-    # create empty list for delta_h (elevation differences)
-    delta_h = []
+    Parameters
+    ----------
+    - dem
+        reference dem
+    - is2
+        ICESat-2 dataset
+    - label
+        label to be assigned to the output dataset
 
-    # for each IS2 measurement point
-    for i in range(len(is2.easting)):
-        # value of easting, northing and height from IS2 data
-        e = is2.easting.values[i]
-        n = is2.northing.values[i]
-        elev_is2 = is2.h_te_best_fit.values[i]
+    Returns
+    -------
+    ICESat-2 dataset with the additional values of "dem_elevation" (retained values of reference DEM)
+    and "dh" (difference between IS2 and reference DEM)
+    """
 
-        # value of elevation (DEM) for current pt in the
-        elev_dem = dem.value_at_coords(e, n)
+    # path to cached file
+    cache_path = Path(f"cache/{label}-is2-dh.nc")
 
-        # subtract the values
-        elev_difference = elev_dem - elev_is2
+    # if subset already exists open dataset
+    if cache_path.is_file():
+        return xr.open_dataset(cache_path)
 
-        # if the elevation difference has a nodata value (outside of GAO boundaries), append nodata
-        # else append elevation difference as float
-        # maybe there's a smoother way of doing this - for example remove all the pts with nodata value from dataset (now there is gonna be a lot of nan values...)
-        if elev_difference == dem.nodata:
-            delta_h.append(np.nan)
-        else:
-            delta_h.append(float(elev_difference))
+    # assign DEM elevation as a variable to the IS2 data
+    is2["dem_elevation"] = "index", dem.value_at_coords(is2.easting, is2.northing)
 
-    # create new variable and assign elevation differences to existing IS2 dataset
-    is2 = is2.assign(dh = delta_h)
-
-    # values are assigned as coordinates, fixes them to be assigned as values
-    is2_dh = is2.reset_index("dh").reset_coords("dh")
+    # subtract IS2 elevation from DEM elevation
+    is2["dh"] = is2["dem_elevation"] - is2["h_te_best_fit"]
 
     # save as netcdf file
-    cache_path = Path(f"cache/{label}-is2-dh.nc")
-    is2_dh.to_netcdf(cache_path)
+    is2.to_netcdf(cache_path)
 
-    return is2_dh
+    return is2
 
-def hypsometric_binning(is2_path, ref_dem_path):
-    # not working
-    # open datasets with xarray
-    is2 = xr.open_dataset(is2_path) # ICESat-2 data
-    ref_dem = xr.open_dataset(ref_dem_path) # cropped DEM
+def hypsometric_binning(data_path):
+    """
+    hypsometric binning
 
+    """
 
-    # write crs
-    is2.rio.write_crs("epsg:32633", inplace=True)
-    ref_dem.rio.write_crs("epsg:32633", inplace=True)
+    # open dataset with xarray
+    data = xr.open_dataset(data_path) # ICESat-2 data
 
-    # rename easting, northing to x, y (only necessary in IS2 data)
-    is2 = is2.rename({'easting': 'x','northing': 'y'})
+    # hypsometric binning (ddem = elevation change, ref_dem = elevation from IS2)
+    binned = xdem.volume.hypsometric_binning(ddem=data["dh"], ref_dem=data["dem_elevation"], bins=10)
 
-    # create a subset only containing variables x, y, dh
-    #rast.reset_index("dh").reset_coords("dh") # resets dh values from coords to variable
-    is2 = is2[['x', 'y', 'dh']]
-
-    # convert tu ndarray
-    is2 = is2.to_array()
-    is2 = is2.to_numpy()
-    ref_dem = ref_dem.to_array()
-    ref_dem = ref_dem.to_numpy()
-
-    #do hypsometric binning
-    xdem.volume.hypsometric_binning(is2, ref_dem)
-
-    return
-
-
-
-
+    return binned
 
 if __name__ == "__main__":
     main()
